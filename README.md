@@ -1,5 +1,6 @@
 # alphv-collections-crawler
 Crawls the collections mirrors of the Alphv hidden service.
+The results will be displayed in a CLI table, additionally results are saved to a JSON file (filename defined in config).
 
 **Onion Service:**
 ```
