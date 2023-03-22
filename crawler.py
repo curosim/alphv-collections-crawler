@@ -1,5 +1,4 @@
 import requests
-from random import randint
 import json
 import time
 from prettytable import PrettyTable
