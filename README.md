@@ -18,6 +18,7 @@ python -m pip install -r requirements.txt
 ### Usage:
 
 Simply run the script in the command line, no parameters needed.
+<br>
 Some options can be set in the source code (tor socks port, website cookie values, results filename).
 
 ```
