@@ -20,6 +20,8 @@ python -m pip install -r requirements.txt
 Simply run the script in the command line, no parameters needed.
 <br>
 Some options can be set in the source code (tor socks port, website cookie values, results filename).
+<br>
+Make sure to have the TOR Socks proxy running before executing.
 
 ```
 python crawler.py
