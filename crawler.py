@@ -191,9 +191,8 @@ class AlphvNavigator():
 		elif cmd == 'exit':
 			print("[*] Quitting application.")
 			exit()
-
-		else:
-			print("[!] Command \'{0}\' not found...".format(cmd))
+		elif cmd == '': pass
+		else: print("[!] Command \'{0}\' not found...".format(cmd))
 		
 		self.cli()
 
