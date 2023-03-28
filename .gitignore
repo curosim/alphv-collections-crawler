@@ -1,6 +1,6 @@
-# Ignore results file
+# User generated files shall not be added to the repo...
 results.json
-
+alphv.db
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
