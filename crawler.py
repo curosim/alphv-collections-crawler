@@ -66,13 +66,16 @@ class Database(object):
 		''')
 		self.db.commit()
 
-	def check_if_collection_exists(self, name):
-		self.cursor.execute('''SELECT * FROM collections WHERE name=?''', (name,))
-		collection = self.cursor.fetchone() #retrieve the first row
-		if collection == None:
-			return False
+	def check_if_collection_exists(self, collection_id=None, name=None):
+		if collection_id == None and name == None:
+			print("Dev... please, check this function (db.check_if_collection_exists) again and implement it correctly.")
 		else:
-			return True
+			self.cursor.execute('''SELECT * FROM collections WHERE name=?''', (name,))
+			collection = self.cursor.fetchone() #retrieve the first row
+			if collection == None:
+				return False
+			else:
+				return True
 
 	def add_collection(self, name, url, size, ts):
 		""" Adds new collection to the database.
@@ -180,7 +183,12 @@ class AlphvNavigator():
 			self.update_collection_mirrors()
 
 		elif cmd == 'explore':
-			print("to be implemented...")
+			if len(args) != 1:
+				print("[!] Please check the syntax of your command...")
+			else:
+				collection_id = args[0]
+				if self.db.check_if_collection_exists(collection_id=collection_id):
+					self.explore_collection(collection_id)
 
 		elif cmd == 'search':
 			print("to be implemented...")
@@ -196,6 +204,10 @@ class AlphvNavigator():
 		
 		self.cli()
 
+	def explore_collection(self, collection_id):
+		# TBD
+		pass
+
 	def update_collection_mirrors(self):
 		""" List all the mirrors of the publicized collections.
 		"""
@@ -206,7 +218,7 @@ class AlphvNavigator():
 
 			# Add all yet unknown collections to DB.
 			for collection in collections:
-				if self.db.check_if_collection_exists(collection['title']) == False:
+				if self.db.check_if_collection_exists(name=collection['title']) == False:
 					self.db.add_collection(
 							name=collection['title'],
 							url=collection['url'],
