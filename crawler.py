@@ -245,6 +245,10 @@ class AlphvNavigator():
 			i = i+1
 		print(table)
 
+	def download(self, collection, path):
+		""" Download folder recursively, single files are possible too of course.
+		"""
+		pass
 
 	def explore_collection(self, collection_id):
 		""" CLI implementation to browse the folder structure of a collection.
