@@ -68,9 +68,13 @@ class Database(object):
 
 	def check_if_collection_exists(self, collection_id=None, name=None):
 		if collection_id == None and name == None:
+			# This should actually never be triggered...
 			print("Dev... please, check this function (db.check_if_collection_exists) again and implement it correctly.")
 		else:
-			self.cursor.execute('''SELECT * FROM collections WHERE name=?''', (name,))
+			if collection_id: query = '''SELECT * FROM collections WHERE id={0}'''.format(collection_id)
+			else: query = '''SELECT * FROM collections WHERE name="{0}"'''.format(name)
+
+			self.cursor.execute(query)
 			collection = self.cursor.fetchone() #retrieve the first row
 			if collection == None:
 				return False
@@ -90,6 +94,12 @@ class Database(object):
 		self.cursor.execute('''SELECT * FROM collections''')
 		collections = self.cursor.fetchall() #retrieve the first row
 		return collections
+
+	def get_collection_by_id(self, collection_id):
+		query = '''SELECT * FROM collections WHERE id={0}'''.format(collection_id)
+		self.cursor.execute(query)
+		collection = self.cursor.fetchone() #retrieve the first row
+		return collection
 
 class AlphvApi():
 	""" Class to interact with the Alphv Website.
@@ -117,15 +127,25 @@ class AlphvApi():
 			return None
 
 	def navigate_collection_files(self, url, path):
-		"""
+		""" Returns list of folder structure of requested path.
 		"""
 
-		data = '{"path":"/data/Coolebavisllp"}'
-		response = requests.post(
-			'http://{0}{1}'.format(url, path),
-			data=data,
-		)
-		print(response.text)
+		data = '{"path":"%s"}' % path
+		url = '{0}/api/ls'.format(url)
+
+		# request data from website
+		response = self.session.post(url=url, data=data)
+
+		# the data comes in a strange format (I think it's some kind of object)
+		# it has some things in it which corrupts the JSON parsing, but it's handled below
+		new_results = []
+		source = response.text
+		results = source.split('\x00\x00\x00L')
+		results.pop(0)
+		for result in results:
+			new_results.append(json.loads(result))
+
+		return new_results
 
 
 class AlphvNavigator():
@@ -189,6 +209,8 @@ class AlphvNavigator():
 				collection_id = args[0]
 				if self.db.check_if_collection_exists(collection_id=collection_id):
 					self.explore_collection(collection_id)
+				else:
+					print("[!] No collection with ID '{0}' exists...".format(collection_id))
 
 		elif cmd == 'search':
 			print("to be implemented...")
@@ -201,12 +223,53 @@ class AlphvNavigator():
 			exit()
 		elif cmd == '': pass
 		else: print("[!] Command \'{0}\' not found...".format(cmd))
-		
+
 		self.cli()
 
 	def explore_collection(self, collection_id):
-		# TBD
-		pass
+		collection = self.db.get_collection_by_id(collection_id=collection_id)
+		print(" [*] Accessing collection {0}".format(collection['name']))
+		
+		exploring = True
+		path = '/'
+		while exploring == True:
+
+			user_input = input(' [{0}][{1}]> '.format(collection['name'], path))
+			results = self.api.navigate_collection_files(url=collection['url'], path=path)
+			if user_input == 'ls':
+				table = PrettyTable()
+				table.align = 'l'
+				table.field_names = ["#", "Name", "Directory", "Size"]
+
+				i = 0
+				for result in results:
+					if result['attrs']['isDirectory'] == True: rowtype = 'dir'
+					else: rowtype = 'file'
+
+					table.add_row([
+						i,
+						result['path'],
+						rowtype,
+						result['attrs']['size']
+					])
+					i = i+1
+				print(table)
+			elif user_input.startswith('cd'):
+				row_id = user_input.split(' ')[1]
+				try:
+					if row_id == '..':
+						if path.count('/') > 1:
+							path = path.rsplit('/')[0]
+						else:
+							path = '/'
+					else:
+						row_id = int(row_id)
+						results[row_id]
+						path = results[row_id]['path']
+				except ValueError:
+					print(" [!] Please check the syntax of your comand..")
+				except IndexError:
+					print(" [!] No option with ID '{0}' exists...".format(row_id))
 
 	def update_collection_mirrors(self):
 		""" List all the mirrors of the publicized collections.
@@ -226,7 +289,7 @@ class AlphvNavigator():
 							ts=collection['dt']
 						)
 					newly_added = newly_added+1
-			
+
 			# Let the user know what changed (if and how many new collections were added)
 			if newly_added == 0:
 				if len(collections) > 0:
