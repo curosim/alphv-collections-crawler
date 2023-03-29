@@ -178,7 +178,7 @@ class AlphvNavigator():
 		print(' list -> Lists collections')
 		print(' update -> Updates collections')
 		print(' explore [ID] -> Traverse collection folder structure')
-		print(' search [ID] -> Search through collection')
+		#print(' search [ID] -> Search through collection')
 		print(' help -> Shows this help')
 		print(' exit -> Quit application')
 		print('')
@@ -215,9 +215,6 @@ class AlphvNavigator():
 				else:
 					print("[!] No collection with ID '{0}' exists...".format(collection_id))
 
-		elif cmd == 'search':
-			print("to be implemented...")
-
 		elif cmd == 'help':
 			self.display_help()
 
@@ -232,7 +229,7 @@ class AlphvNavigator():
 	def _display_results_table(self, results):
 		table = PrettyTable()
 		table.align = 'l'
-		table.field_names = ["#", "Name", "Directory", "Size"]
+		table.field_names = ["#", "Name", "Type", "Size"]
 
 		i = 0
 		for result in results:
@@ -250,19 +247,36 @@ class AlphvNavigator():
 
 
 	def explore_collection(self, collection_id):
+		""" CLI implementation to browse the folder structure of a collection.
+		"""
+
+		def display_explorer_help():
+			""" Show help menu for the explorer-submenu...
+			"""
+			print('')
+			print(' EXPLORER COMMANDS:')
+			print(' '+'-'*50)
+			print(' ls -> Lists files in current folder')
+			print(' cd [ID] -> Change directory')
+			print(' download [ID] -> Download file or directory (recursively!)')
+			print(' exit -> Exit collection')
+			print(' help -> Shows this help')
+			print('')
+
 		collection = self.db.get_collection_by_id(collection_id=collection_id)
-		print(" [*] Accessing collection {0}".format(collection['name']))
+		print(" [*] Accessing collection \"{0}\"".format(collection['name']))
 		
-		exploring = True
 		display_results = False
-		path = '/'
-		while exploring == True:
+		path = '/data/'
+
+		while True:
 
 			# Show results table after every cd (so an additional ls command is not needed)
 			if display_results == True: self._display_results_table(results)
 
 			user_input = input(' [{0}][{1}]> '.format(collection['name'], path))
 			results = self.api.navigate_collection_files(url=collection['url'], path=path)
+			
 			if user_input == 'ls':
 				self._display_results_table(results)
 			elif user_input.startswith('cd'):
@@ -284,9 +298,14 @@ class AlphvNavigator():
 					print(" [!] Please check the syntax of your comand..")
 				except IndexError:
 					print(" [!] No option with ID '{0}' exists...".format(row_id))
-
+			elif user_input == 'exit':
+				break;
+			elif user_input == 'help':
+				display_explorer_help()
+				display_results = False
 			else:
 				print(" [!] Command '{0}' not found".format(user_input))
+				display_results = False
 
 	def update_collection_mirrors(self):
 		""" List all the mirrors of the publicized collections.
