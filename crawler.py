@@ -4,6 +4,8 @@ import time
 from prettytable import PrettyTable
 from datetime import datetime
 import sqlite3
+import re
+import ast
 
 CONFIG = {
 	# Filepath of the sqlite database file
@@ -138,11 +140,12 @@ class AlphvApi():
 
 		# the data comes in a strange format (I think it's some kind of object)
 		# it has some things in it which corrupts the JSON parsing, but it's handled below
+		# it's kinda a hacky way but it works! :)
 		new_results = []
-		source = response.text
-		results = source.split('\x00\x00\x00L')
+		results = response.text.split("{\"path")
 		results.pop(0)
 		for result in results:
+			result = '{"path'+result.split('\x00')[0]
 			new_results.append(json.loads(result))
 
 		return new_results
@@ -226,50 +229,64 @@ class AlphvNavigator():
 
 		self.cli()
 
+	def _display_results_table(self, results):
+		table = PrettyTable()
+		table.align = 'l'
+		table.field_names = ["#", "Name", "Directory", "Size"]
+
+		i = 0
+		for result in results:
+			if result['attrs']['isDirectory'] == True: rowtype = 'dir'
+			else: rowtype = 'file'
+
+			table.add_row([
+				i,
+				result['path'],
+				rowtype,
+				result['attrs']['size']
+			])
+			i = i+1
+		print(table)
+
+
 	def explore_collection(self, collection_id):
 		collection = self.db.get_collection_by_id(collection_id=collection_id)
 		print(" [*] Accessing collection {0}".format(collection['name']))
 		
 		exploring = True
+		display_results = False
 		path = '/'
 		while exploring == True:
+
+			# Show results table after every cd (so an additional ls command is not needed)
+			if display_results == True: self._display_results_table(results)
 
 			user_input = input(' [{0}][{1}]> '.format(collection['name'], path))
 			results = self.api.navigate_collection_files(url=collection['url'], path=path)
 			if user_input == 'ls':
-				table = PrettyTable()
-				table.align = 'l'
-				table.field_names = ["#", "Name", "Directory", "Size"]
-
-				i = 0
-				for result in results:
-					if result['attrs']['isDirectory'] == True: rowtype = 'dir'
-					else: rowtype = 'file'
-
-					table.add_row([
-						i,
-						result['path'],
-						rowtype,
-						result['attrs']['size']
-					])
-					i = i+1
-				print(table)
+				self._display_results_table(results)
 			elif user_input.startswith('cd'):
 				row_id = user_input.split(' ')[1]
 				try:
 					if row_id == '..':
+						# TODO: needs some fixing, doesnt work reliable...
 						if path.count('/') > 1:
 							path = path.rsplit('/')[0]
 						else:
 							path = '/'
 					else:
 						row_id = int(row_id)
-						results[row_id]
-						path = results[row_id]['path']
+						results[row_id] # triggers IndexError if it doesnt exist
+						path = '/'+results[row_id]['path']
+
+					display_results = True
 				except ValueError:
 					print(" [!] Please check the syntax of your comand..")
 				except IndexError:
 					print(" [!] No option with ID '{0}' exists...".format(row_id))
+
+			else:
+				print(" [!] Command '{0}' not found".format(user_input))
 
 	def update_collection_mirrors(self):
 		""" List all the mirrors of the publicized collections.
