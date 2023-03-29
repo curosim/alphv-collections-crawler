@@ -9,7 +9,7 @@ CONFIG = {
 	# Filepath of the sqlite database file
 	'dbfile':'alphv.db',
 
-	# URL of the Onion service
+	# URL of the main onion service
 	'url':'alphvmmm27o3abo3r2mlmjrpdmzle3rykajqc5xsj7j7ejksbpsa36ad.onion',
 
 	# Tor socks proxy port
