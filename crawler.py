@@ -176,19 +176,27 @@ class AlphvApi():
 
 	def download_file(self, collection, filepath):
 
-		# Create local folder structure if it doesnt exist yet
+		# Prepare some variables for local path creation and download...
 		splitted = filepath.rsplit('/', 1)
 		local_folder_path = CONFIG['downloads_folder']+'/'+collection['name'].upper()+'/'+splitted[0]
 		local_file_path = local_folder_path+'/'+splitted[1]
+		
+		# Create local folder structure if it doesnt exist yet
 		os.makedirs(local_folder_path, exist_ok=True)
 
 		print(" [*] Downloading: {0}".format(filepath))
 
-		# download file in chunks, it's super fast! (got it from stackoverflow :P)
+		# download file in chunks, it should be super fast but bc of TOR it's not really...
 		url = collection['url'] + '/' + filepath
-		with self.session.get(url, stream=True) as r:
-			with open(local_file_path, 'wb') as f:
-				shutil.copyfileobj(r.raw, f)
+		
+		try:
+			with self.session.get(url, stream=True) as r:
+				with open(local_file_path, 'wb') as f:
+					shutil.copyfileobj(r.raw, f)
+		except:
+			return False
+		else:
+			return True
 
 	def navigate_collection_files(self, url, path):
 		""" Returns list of folder structure of requested path.
@@ -331,8 +339,12 @@ class AlphvNavigator():
 		downloads = self.db.get_unfinished_downloads_by_task_identifier(task_identifier=task_identifier)
 
 		for download in downloads:
-			self.api.download_file(collection, filepath=download['fpath'])
+			success = self.api.download_file(collection, filepath=download['fpath'])
+			if success == True: self.db.update_download(download_id=download['id'], downloaded=True)
 
+		print(" [*] All files have been downloaded!")
+
+		# TODO: check here if all downloads have been successful and if not, try again.
 
 	def explore_collection(self, collection_id):
 		""" CLI implementation to browse the folder structure of a collection.
