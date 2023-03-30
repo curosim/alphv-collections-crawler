@@ -4,8 +4,7 @@ import time
 from prettytable import PrettyTable
 from datetime import datetime
 import sqlite3
-import re
-import ast
+import shutil
 
 CONFIG = {
 	# Filepath of the sqlite database file
@@ -64,7 +63,15 @@ class Database(object):
 				url TEXT,
 				size INT,
 				ts TEXT
-			)
+			);
+		''')
+		self.cursor.execute('''
+			CREATE TABLE IF NOT EXISTS downloads(
+				id INTEGER PRIMARY KEY,
+				collection_id INT,
+				fpath TEXT,
+				downloaded BOOLEAN
+			);
 		''')
 		self.db.commit()
 
@@ -103,6 +110,16 @@ class Database(object):
 		collection = self.cursor.fetchone() #retrieve the first row
 		return collection
 
+	def add_download(self, collection_id, fpath):
+		""" Creates DB entry for download.
+		"""
+		self.cursor.execute('''
+			INSERT INTO downloads(collection_id, fpath, downloaded)
+			VALUES(?,?,?)''', (collection_id, fpath, False)
+		)
+		self.db.commit()
+
+
 class AlphvApi():
 	""" Class to interact with the Alphv Website.
 	"""
@@ -127,6 +144,28 @@ class AlphvApi():
 			return data
 		except Exception as e:
 			return None
+
+	def generate_file_list(self, collection, path):
+		""" This method recursively generates a list of all files in a directory.
+		"""
+		results = self.navigate_collection_files(collection['url'], path)
+		files = []
+		for result in results:
+			if result['attrs']['isDirectory'] == True:
+				new_files = self.generate_file_list(collection, result['path'])
+				files = files + new_files
+			else:
+				filepath = result['path']
+				files.append(filepath)
+			print("   > Total filepaths collected so far: {0}".format(len(files)))
+		return files
+
+	def download_file(self, url):
+		local_filename = url.split('/')[-1]
+		with requests.get(url, stream=True) as r:
+			with open(local_filename, 'wb') as f:
+				shutil.copyfileobj(r.raw, f)
+		return local_filename
 
 	def navigate_collection_files(self, url, path):
 		""" Returns list of folder structure of requested path.
@@ -222,7 +261,7 @@ class AlphvNavigator():
 			print("[*] Quitting application.")
 			exit()
 		elif cmd == '': pass
-		else: print("[!] Command \'{0}\' not found...".format(cmd))
+		else: print(" [!] Command \'{0}\' not found...".format(cmd))
 
 		self.cli()
 
@@ -238,7 +277,7 @@ class AlphvNavigator():
 
 			table.add_row([
 				i,
-				result['path'],
+				'/'+result['path'],
 				rowtype,
 				result['attrs']['size']
 			])
@@ -248,11 +287,24 @@ class AlphvNavigator():
 	def download(self, collection, path):
 		""" Download folder recursively, single files are possible too of course.
 		"""
-		pass
+		print(' [*] Generating a list of all file-paths, this can take quite some time.')
+		print('     For every directory, a new request over TOR has to be made and that takes some time.')
+
+		file_list = self.api.generate_file_list(collection, path)
+
+		print(' [*] File list generated, total files found: {0}'.format(len(file_list)))
+		print(' [*] Preparing downloads...')
+		for filepath in file_list:
+			self.db.add_download(
+					collection_id=collection['id'],
+					fpath=filepath
+				)
+		print(' [*] Starting download now.')
 
 	def explore_collection(self, collection_id):
 		""" CLI implementation to browse the folder structure of a collection.
 		"""
+		# TODO: This whole function is quite a mess and not easy to understand at all -> FIX!
 
 		def display_explorer_help():
 			""" Show help menu for the explorer-submenu...
@@ -263,6 +315,7 @@ class AlphvNavigator():
 			print(' ls -> Lists files in current folder')
 			print(' cd [ID] -> Change directory')
 			print(' download [ID] -> Download file or directory (recursively!)')
+			print(' gen_list [ID] -> Generates a list of all files in the directory (recursively!)')
 			print(' exit -> Exit collection')
 			print(' help -> Shows this help')
 			print('')
@@ -275,14 +328,15 @@ class AlphvNavigator():
 
 		while True:
 
+			results = self.api.navigate_collection_files(url=collection['url'], path=path)
+
 			# Show results table after every cd (so an additional ls command is not needed)
 			if display_results == True: self._display_results_table(results)
 
 			user_input = input(' [{0}][{1}]> '.format(collection['name'], path))
-			results = self.api.navigate_collection_files(url=collection['url'], path=path)
 			
 			if user_input == 'ls':
-				self._display_results_table(results)
+				display_results = True
 			elif user_input.startswith('cd'):
 				row_id = user_input.split(' ')[1]
 				try:
@@ -302,6 +356,15 @@ class AlphvNavigator():
 					print(" [!] Please check the syntax of your comand..")
 				except IndexError:
 					print(" [!] No option with ID '{0}' exists...".format(row_id))
+			elif user_input.startswith('download'):
+				row_id = int(user_input.split(' ')[1])
+				path = results[row_id]['path']
+				self.download(collection, path)
+				display_results = False
+
+			elif user_input == 'gen_list':
+				# to be implemented...
+				pass
 			elif user_input == 'exit':
 				break;
 			elif user_input == 'help':
