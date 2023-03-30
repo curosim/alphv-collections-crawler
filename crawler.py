@@ -5,6 +5,9 @@ from prettytable import PrettyTable
 from datetime import datetime
 import sqlite3
 import shutil
+import random
+import string
+import os
 
 CONFIG = {
 	# Filepath of the sqlite database file
@@ -26,6 +29,8 @@ CONFIG = {
 
 	# File where query results are saved to
 	'results_file':'results.json',
+
+	'downloads_folder':'./downloads'
 }
 
 def get_tor_session(port):
@@ -69,6 +74,7 @@ class Database(object):
 			CREATE TABLE IF NOT EXISTS downloads(
 				id INTEGER PRIMARY KEY,
 				collection_id INT,
+				task_identifier TEXT,
 				fpath TEXT,
 				downloaded BOOLEAN
 			);
@@ -90,8 +96,8 @@ class Database(object):
 			else:
 				return True
 
-	def add_collection(self, name, url, size, ts):
-		""" Adds new collection to the database.
+	def create_collection(self, name, url, size, ts):
+		""" Create new collection to the database.
 		"""
 		self.cursor.execute('''
 			INSERT INTO collections(name, url, size, ts)
@@ -101,7 +107,7 @@ class Database(object):
 
 	def get_all_collections(self):
 		self.cursor.execute('''SELECT * FROM collections''')
-		collections = self.cursor.fetchall() #retrieve the first row
+		collections = self.cursor.fetchall()
 		return collections
 
 	def get_collection_by_id(self, collection_id):
@@ -110,19 +116,28 @@ class Database(object):
 		collection = self.cursor.fetchone() #retrieve the first row
 		return collection
 
-	def add_download(self, collection_id, fpath):
+	def create_download(self, collection_id, fpath, task_identifier):
 		""" Creates DB entry for download.
 		"""
 		self.cursor.execute('''
-			INSERT INTO downloads(collection_id, fpath, downloaded)
-			VALUES(?,?,?)''', (collection_id, fpath, False)
+			INSERT INTO downloads(collection_id, task_identifier, fpath, downloaded)
+			VALUES(?,?,?, ?)''', (collection_id, task_identifier, fpath, False)
 		)
 		self.db.commit()
+
+	def get_unfinished_downloads_by_task_identifier(self, task_identifier):
+		""" Returns all unfinished downloads by a task_identifier
+		"""
+		query = '''SELECT * FROM downloads WHERE downloads.task_identifier="{0}" AND downloads.downloaded={1}'''.format(task_identifier, False)
+		self.cursor.execute(query)
+		downloads = self.cursor.fetchall()
+		return downloads
 
 
 class AlphvApi():
 	""" Class to interact with the Alphv Website.
 	"""
+	files = []
 
 	def __init__(self, onion_address, tor_socks_port):
 		self.hidden_service_url = 'http://{0}'.format(onion_address)
@@ -148,24 +163,32 @@ class AlphvApi():
 	def generate_file_list(self, collection, path):
 		""" This method recursively generates a list of all files in a directory.
 		"""
+		print("   > Total filepaths collected so far: {0}".format(len(self.files)))
 		results = self.navigate_collection_files(collection['url'], path)
-		files = []
 		for result in results:
 			if result['attrs']['isDirectory'] == True:
 				new_files = self.generate_file_list(collection, result['path'])
-				files = files + new_files
+				self.files = self.files + new_files
 			else:
 				filepath = result['path']
-				files.append(filepath)
-			print("   > Total filepaths collected so far: {0}".format(len(files)))
-		return files
+				self.files.append(filepath)
+		return self.files
 
-	def download_file(self, url):
-		local_filename = url.split('/')[-1]
-		with requests.get(url, stream=True) as r:
-			with open(local_filename, 'wb') as f:
+	def download_file(self, collection, filepath):
+
+		# Create local folder structure if it doesnt exist yet
+		splitted = filepath.rsplit('/', 1)
+		local_folder_path = CONFIG['downloads_folder']+'/'+collection['name'].upper()+'/'+splitted[0]
+		local_file_path = local_folder_path+'/'+splitted[1]
+		os.makedirs(local_folder_path, exist_ok=True)
+
+		print(" [*] Downloading: {0}".format(filepath))
+
+		# download file in chunks, it's super fast! (got it from stackoverflow :P)
+		url = collection['url'] + '/' + filepath
+		with self.session.get(url, stream=True) as r:
+			with open(local_file_path, 'wb') as f:
 				shutil.copyfileobj(r.raw, f)
-		return local_filename
 
 	def navigate_collection_files(self, url, path):
 		""" Returns list of folder structure of requested path.
@@ -246,13 +269,13 @@ class AlphvNavigator():
 
 		elif cmd == 'explore':
 			if len(args) != 1:
-				print("[!] Please check the syntax of your command...")
+				print(" [!] Please check the syntax of your command...")
 			else:
 				collection_id = args[0]
 				if self.db.check_if_collection_exists(collection_id=collection_id):
 					self.explore_collection(collection_id)
 				else:
-					print("[!] No collection with ID '{0}' exists...".format(collection_id))
+					print(" [!] No collection with ID '{0}' exists...".format(collection_id))
 
 		elif cmd == 'help':
 			self.display_help()
@@ -284,22 +307,32 @@ class AlphvNavigator():
 			i = i+1
 		print(table)
 
-	def download(self, collection, path):
+	def download_folder(self, collection, path):
 		""" Download folder recursively, single files are possible too of course.
 		"""
 		print(' [*] Generating a list of all file-paths, this can take quite some time.')
 		print('     For every directory, a new request over TOR has to be made and that takes some time.')
 
+		self.files = [] # generate list of filepaths...
 		file_list = self.api.generate_file_list(collection, path)
 
 		print(' [*] File list generated, total files found: {0}'.format(len(file_list)))
 		print(' [*] Preparing downloads...')
+
+		task_identifier = ''.join(random.choice(string.ascii_lowercase) for i in range(20))
+
 		for filepath in file_list:
-			self.db.add_download(
+			self.db.create_download(
 					collection_id=collection['id'],
+					task_identifier=task_identifier,
 					fpath=filepath
 				)
 		print(' [*] Starting download now.')
+		downloads = self.db.get_unfinished_downloads_by_task_identifier(task_identifier=task_identifier)
+
+		for download in downloads:
+			self.api.download_file(collection, filepath=download['fpath'])
+
 
 	def explore_collection(self, collection_id):
 		""" CLI implementation to browse the folder structure of a collection.
@@ -359,7 +392,7 @@ class AlphvNavigator():
 			elif user_input.startswith('download'):
 				row_id = int(user_input.split(' ')[1])
 				path = results[row_id]['path']
-				self.download(collection, path)
+				self.download_folder(collection, path)
 				display_results = False
 
 			elif user_input == 'gen_list':
@@ -385,7 +418,7 @@ class AlphvNavigator():
 			# Add all yet unknown collections to DB.
 			for collection in collections:
 				if self.db.check_if_collection_exists(name=collection['title']) == False:
-					self.db.add_collection(
+					self.db.create_collection(
 							name=collection['title'],
 							url=collection['url'],
 							size=collection['size'],
