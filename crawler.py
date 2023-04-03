@@ -30,7 +30,11 @@ CONFIG = {
 	# File where query results are saved to
 	'results_file':'results.json',
 
-	'downloads_folder':'./downloads'
+	# Base folder where the downloaded files are stored.
+	'downloads_folder':'./downloads',
+
+	# Filename where the list of filepaths is stored (on call of 'filepaths' command)
+	'filepaths_filename':'filepaths.txt'
 }
 
 def get_tor_session(port):
@@ -106,7 +110,7 @@ class Database(object):
 		self.db.commit()
 
 	def get_all_collections(self):
-		self.cursor.execute('''SELECT * FROM collections''')
+		self.cursor.execute('''SELECT * FROM collections ORDER BY ts DESC''')
 		collections = self.cursor.fetchall()
 		return collections
 
@@ -297,6 +301,8 @@ class AlphvNavigator():
 		self.cli()
 
 	def _display_results_table(self, results):
+		""" Displays folder contents in a pretty CLI table.
+		"""
 		table = PrettyTable()
 		table.align = 'l'
 		table.field_names = ["#", "Name", "Type", "Size"]
@@ -360,7 +366,7 @@ class AlphvNavigator():
 			print(' ls -> Lists files in current folder')
 			print(' cd [ID] -> Change directory')
 			print(' download [ID] -> Download file or directory (recursively!)')
-			print(' gen_list [ID] -> Generates a list of all files in the directory (recursively!)')
+			print(' filepaths [ID] -> Generates a list of all files in the directory (recursively!)')
 			print(' exit -> Exit collection')
 			print(' help -> Shows this help')
 			print('')
@@ -401,15 +407,43 @@ class AlphvNavigator():
 					print(" [!] Please check the syntax of your comand..")
 				except IndexError:
 					print(" [!] No option with ID '{0}' exists...".format(row_id))
+
 			elif user_input.startswith('download'):
-				row_id = int(user_input.split(' ')[1])
-				path = results[row_id]['path']
-				self.download_folder(collection, path)
+				try:
+					row_id = int(user_input.split(' ')[1])
+					path = results[row_id]['path']
+				except:
+					print(" [!] Please check the syntax of your command")
+				else:
+					self.download_folder(collection, path)
+				
 				display_results = False
 
-			elif user_input == 'gen_list':
-				# to be implemented...
-				pass
+			elif user_input.startswith('filepaths'):
+				try:
+					row_id = int(user_input.split(' ')[1])
+					path = results[row_id]['path']
+				except:
+					print(" [!] Please check the syntax of your command")
+				else:
+					print(' [*] Generating a list of all file-paths, this can take quite some time.')
+					print('     For every directory, a new request over TOR has to be made and that takes some time.')
+
+					file_list = self.api.generate_file_list(collection, path)
+
+					print(' [*] File links crawling finished, total found: {0}'.format(len(file_list)))
+
+					# append base url to each filepath
+					urls_list = [collection['url']+'/'+s for s in file_list]
+
+					# write filepaths to file
+					print(' [*] Writing file links to file ({0})'.format(CONFIG['filepaths_filename']))
+					with open(CONFIG['filepaths_filename'], mode='w') as f:
+						f.write('\n'.join(urls_list))
+
+					print(' [*] All filepaths written to file.')
+				display_results = False
+
 			elif user_input == 'exit':
 				break;
 			elif user_input == 'help':
@@ -481,20 +515,9 @@ def main():
 	alphv.display_help()
 	alphv.cli()
 
-	"""
-	alphv.navigate_collection_files(
-		url='zyb7j23sfsert574hii342lwnz7qeyw2kb7zom74wjabwhifhpoknaqd.onion',
-		path='/data/Coolebavisllp'
-	)
-	exit()
-
-	# Writing the results to a file.
-	if collections:
-		with open(CONFIG['results_file'], 'w') as f:
-			f.write(json.dumps(collections, indent=4))
-		print("[*] Results written to file: {0}".format(CONFIG['results_file']))
-
-	"""
-
 if __name__ == '__main__':
-	main()
+	try:
+		main()
+	except KeyboardInterrupt:
+		print('\n')
+		print(' [!] Quitting application (CTRL+C)')
