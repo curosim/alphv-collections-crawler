@@ -1,7 +1,7 @@
 # alphv-collections-crawler
-Crawls the collections mirrors of the Alphv hidden service.
+Crawls the collections mirrors of the Alphv ransomware leaks hidden service.
 <br>
-The results are displayed in a CLI table, additionally results are saved to a JSON file (filename defined in config).
+You can browse the files of each collection, download them or generate a list of each file path.
 
 
 **Onion Service:**
