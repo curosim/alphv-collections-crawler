@@ -392,9 +392,8 @@ class AlphvNavigator():
 				row_id = user_input.split(' ')[1]
 				try:
 					if row_id == '..':
-						# TODO: needs some fixing, doesnt work reliable...
 						if path.count('/') > 1:
-							path = path.rsplit('/')[0]
+							path = path.rsplit('/', 1)[0]
 						else:
 							path = '/'
 					else:
