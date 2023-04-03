@@ -4,8 +4,6 @@ Crawls the collections mirrors of the Alphv hidden service.
 The results are displayed in a CLI table, additionally results are saved to a JSON file (filename defined in config).
 
 
-## !!! In development, not ready to use, can break any time. !!!
-
 **Onion Service:**
 ```
 alphvmmm27o3abo3r2mlmjrpdmzle3rykajqc5xsj7j7ejksbpsa36ad.onion
