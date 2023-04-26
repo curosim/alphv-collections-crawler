@@ -3,6 +3,7 @@ Crawls the collections mirrors of the Alphv ransomware leaks hidden service.
 <br>
 You can browse the files of each collection, download them or generate a list of each file path.
 
+*INFO*: This project is not finished yet. Some functions may break or not work at all...
 
 **Onion Service:**
 ```
