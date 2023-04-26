@@ -1,5 +1,5 @@
 # alphv-collections-crawler
-Crawls the collections mirrors of the Alphv ransomware leaks hidden service.
+Crawls the collections of the Alphv ransomware leaks hidden service.
 <br>
 You can browse the files of each collection, download them or generate a list of each file path.
 
